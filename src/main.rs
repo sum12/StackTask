@@ -144,9 +144,15 @@ pub fn main() {
     let mut with_idents = indents(&root, 0);
     with_idents.sort_by_key(|(task, _)| task.start());
 
+    let mut prev_date = i32::MIN;
     for (task, indent) in with_idents {
         let (hours, remaining) = (task.duration() / 3600, task.duration() % 3600);
         let (minutes, seconds) = (remaining / 60, task.duration() % 60);
+        let date = task.start() / (3600 * 24);
+        if prev_date < date {
+            println!("");
+            prev_date = date
+        }
         println!(
             "{hours:02}:{minutes:02}:{seconds:02}{blank: >long$} {text}",
             blank = "",
