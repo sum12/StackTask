@@ -1,4 +1,4 @@
-use std::fs::read_to_string;
+use std::{fs::read_to_string, os};
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Copy, Clone)]
 pub struct WorkTimes {
@@ -86,7 +86,9 @@ fn indents(t: &Task, indent: usize) -> Vec<(&Task, usize)> {
 // each work time is a pair of numbers
 // the first number is the start time and the second number is the end time
 pub fn main() {
-    let buf = read_to_string("/home/sum12/sync/toofc/tasks/done").expect("unable to read file");
+    let filepath = std::env::var("TASKPATH").expect("TASKPATH not set");
+
+    let buf = read_to_string(filepath).expect("unable to read file");
     // println!("{}", format!("read {buf} from file"));
     let mut tasks: Vec<_> = buf
         .lines()
