@@ -1,4 +1,5 @@
 pub mod tasks;
+use chrono::{DateTime, Local};
 pub use tasks::Task;
 
 pub mod work_times;
@@ -100,14 +101,17 @@ pub fn main() {
     let mut with_idents = indents(&root, 0);
     with_idents.sort_by_key(|(task, _)| task.start());
 
-    let mut prev_date = i32::MIN;
+    let mut prev: chrono::NaiveDate = Default::default();
     for (task, indent) in with_idents {
         let (hours, remaining) = (task.duration() / 3600, task.duration() % 3600);
         let (minutes, seconds) = (remaining / 60, task.duration() % 60);
-        let date = task.start() / (3600 * 24);
-        if prev_date < date {
-            println!("");
-            prev_date = date
+        let date = DateTime::from_timestamp(task.start().into(), 0)
+            .unwrap()
+            .with_timezone(&Local)
+            .date_naive();
+        if prev < date {
+            println!("{date}");
+            prev = date;
         }
         println!(
             "{hours:02}:{minutes:02}:{seconds:02}{blank: >long$} {text}",
