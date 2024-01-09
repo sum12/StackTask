@@ -1,56 +1,10 @@
-use std::{fs::read_to_string, os};
+pub mod tasks;
+pub use tasks::Task;
 
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Copy, Clone)]
-pub struct WorkTimes {
-    pub start: i32,
-    pub end: i32,
-}
+pub mod work_times;
+pub use work_times::WorkTimes;
 
-impl WorkTimes {
-    pub fn duration(&self) -> i32 {
-        self.end - self.start
-    }
-}
-
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
-pub struct Task {
-    pub work_times: Vec<WorkTimes>,
-    pub text: String,
-    pub subs: Vec<Task>,
-}
-
-impl Task {
-    pub fn start(&self) -> i32 {
-        self.work_times.iter().fold(i32::MAX, |min, wktime| {
-            if wktime.start <= min {
-                wktime.start
-            } else {
-                min
-            }
-        })
-    }
-
-    pub fn finish(&self) -> i32 {
-        self.work_times.iter().fold(
-            i32::MIN,
-            |max, wktime| if wktime.end > max { wktime.end } else { max },
-        )
-    }
-
-    pub fn duration(&self) -> i32 {
-        self.work_times.iter().map(|wktime| wktime.duration()).sum()
-    }
-
-    // function to check if a task is a subtask of another task
-    // a task(T1) is a subtask of another task(T2) if all the work times of T1 are within the work times of T2
-    pub fn is_subtask_of(&self, other: &Task) -> bool {
-        self.work_times.iter().all(|wktime| {
-            other.work_times.iter().any(|other_wktime| {
-                wktime.start >= other_wktime.start && wktime.end <= other_wktime.end
-            })
-        })
-    }
-}
+use std::fs::read_to_string;
 
 // a method that takes two tasks (t1 and t2) and pushes the second task as a subtask of the first task
 // if the second task is a subtask of the first task but not a subtask of any of the subtasks of the first task
