@@ -55,27 +55,26 @@ pub fn main() {
                 .last()
                 .expect(&format!("missing text for line {line}"))
                 .to_owned();
-            let mut times = vec![];
-            let _: Vec<()> = splits
-                .clone()
-                .map(|entry| {
-                    let mut number = entry;
-                    if entry.as_bytes()[0] == b'#' {
-                        times.clear();
-                        number = &entry[1..];
-                    }
-                    match number.parse::<i32>() {
-                        Ok(v) => times.push(v),
-                        _ => (),
-                    }
-                })
-                .collect();
+            let times = splits.clone().fold(vec![], |mut acc, entry| {
+                let mut number = entry;
+                if entry.as_bytes()[0] == b'#' {
+                    acc.clear();
+                    number = &entry[1..];
+                }
+                acc.push(number);
+                acc
+            });
             let wktimes: Vec<WorkTimes> = times
-                .chunks(2)
-                .map(|chunk| WorkTimes {
-                    end: chunk[0],
-                    start: -1 * chunk[1],
-                })
+                .chunks_exact(2)
+                .filter_map(
+                    |chunk| match (chunk[0].parse::<i32>(), chunk[1].parse::<i32>()) {
+                        (Ok(end), Ok(start)) => Some(WorkTimes {
+                            end,
+                            start: -1 * start,
+                        }),
+                        _ => None,
+                    },
+                )
                 .collect();
             Task {
                 text,
