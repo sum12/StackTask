@@ -73,10 +73,12 @@ pub fn main() {
                 .expect(&format!("missing text for line {line}"))
                 .to_owned();
             let mut wktimes = vec![];
+            let mut done = false;
             loop {
                 match (splits.next(), splits.next()) {
                     (Some(start_entry), Some(end_entry)) => {
                         let end_entry = if end_entry.as_bytes()[0] == b'#' {
+                            done = true;
                             &end_entry[1..]
                         } else {
                             &end_entry[..]
@@ -86,7 +88,10 @@ pub fn main() {
                                 end,
                                 start: -1 * start,
                             }),
-                            _ => continue,
+                            _ => break,
+                        };
+                        if done {
+                            break;
                         }
                     }
                     _ => break,
@@ -106,7 +111,8 @@ pub fn main() {
     for task in tasks.iter() {
         push_subtask(&mut root, task);
     }
-    let with_idents: Vec<(&Task, usize)> = indents(&root, 0);
+    let mut with_idents: Vec<(&Task, usize)> = indents(&root, 0);
+    with_idents.sort_by_key(|(task, _)| task.start());
     let mut better: Vec<_> = with_idents
         .iter()
         .flat_map(|(task, indent)| task.into_iter().zip(repeat(indent)))
