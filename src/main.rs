@@ -27,7 +27,7 @@ fn push_subtask(t1: &mut Task, t2: &Task) {
 
 fn indents(t: &Task, indent: usize) -> Vec<(&Task, usize)> {
     t.subs.iter().fold(
-        t.subs.iter().map(|sub| (sub, indent)).collect(),
+        t.subs.iter().zip(repeat(indent)).collect(),
         |mut acc: Vec<_>, sub| {
             acc.append(&mut indents(sub, indent + 1));
             acc
@@ -55,8 +55,16 @@ pub fn main() {
             * 24
             * 3600;
 
-    let buf = read_to_string(filepath).expect("unable to read file");
-    let mut tasks: Vec<_> = buf
+    let mut root = Task {
+        text: "ROOT".to_owned(),
+        subs: vec![],
+        work_times: vec![WorkTimes {
+            start: i32::MIN,
+            end: i32::MAX,
+        }],
+    };
+    let mut tasks: Vec<_> = read_to_string(filepath)
+        .expect("unable to read file")
         .lines()
         .map(|line| {
             let mut splits = line.split(',').rev();
@@ -90,16 +98,9 @@ pub fn main() {
                 ..Default::default()
             }
         })
+        .filter(|task| (task.start() as i64) >= from_secs)
         .collect();
 
-    let mut root = Task {
-        text: "ROOT".to_owned(),
-        subs: vec![],
-        work_times: vec![WorkTimes {
-            start: i32::MIN,
-            end: i32::MAX,
-        }],
-    };
     tasks.sort_by_key(|t| t.start());
 
     for task in tasks.iter() {
@@ -109,14 +110,12 @@ pub fn main() {
     let mut better: Vec<_> = with_idents
         .iter()
         .flat_map(|(task, indent)| task.into_iter().zip(repeat(indent)))
-        .filter(|(task, _)| (task.start() as i64) >= from_secs)
         .collect();
     better.sort_by_key(|(task, _)| task.start());
 
     let mut prev: chrono::NaiveDate = Default::default();
     for (task, indent) in better {
-        let (hours, remaining) = (task.duration() / 3600, task.duration() % 3600);
-        let (minutes, _) = (remaining / 60, task.duration() % 60);
+        let (hours, minutes) = (task.duration() / 3600, (task.duration() % 3600) / 60);
         let date = DateTime::from_timestamp(task.start().into(), 0)
             .unwrap()
             .with_timezone(&Local)
