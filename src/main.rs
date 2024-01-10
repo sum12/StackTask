@@ -97,11 +97,26 @@ pub fn main() {
     for task in tasks.iter() {
         push_subtask(&mut root, task);
     }
-    let mut with_idents = indents(&root, 0);
-    with_idents.sort_by_key(|(task, _)| task.start());
+    let with_idents = indents(&root, 0);
+    let mut better: Vec<_> = with_idents
+        .iter()
+        .flat_map(|(ref task, ref indent)| {
+            task.work_times.iter().map(move |wktime| {
+                (
+                    Task {
+                        text: task.text.to_string(),
+                        subs: vec![],
+                        work_times: vec![wktime.clone()],
+                    },
+                    indent,
+                )
+            })
+        })
+        .collect();
+    better.sort_by_key(|(task, _)| task.start());
 
     let mut prev: chrono::NaiveDate = Default::default();
-    for (task, indent) in with_idents {
+    for (task, indent) in better {
         let (hours, remaining) = (task.duration() / 3600, task.duration() % 3600);
         let (minutes, seconds) = (remaining / 60, task.duration() % 60);
         let date = DateTime::from_timestamp(task.start().into(), 0)
@@ -113,10 +128,10 @@ pub fn main() {
             prev = date;
         }
         println!(
-            "{hours:02}:{minutes:02}:{seconds:02}{blank: >long$} {text}",
+            "{hours:02}:{minutes:02}:{seconds:02}{blank: >long$} {text: <50}",
             blank = "",
             long = indent * 2,
-            text = task.text
+            text = task.text,
         );
     }
 }
