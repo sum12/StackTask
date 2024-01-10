@@ -130,7 +130,7 @@ pub fn main() {
     let mut prev: chrono::NaiveDate = Default::default();
     for (task, indent) in better {
         let (hours, remaining) = (task.duration() / 3600, task.duration() % 3600);
-        let (minutes, seconds) = (remaining / 60, task.duration() % 60);
+        let (minutes, _) = (remaining / 60, task.duration() % 60);
         let date = DateTime::from_timestamp(task.start().into(), 0)
             .unwrap()
             .with_timezone(&Local)
@@ -140,11 +140,21 @@ pub fn main() {
             prev = date;
         }
         println!(
-            "   {hours:02}:{minutes:02}:{seconds:02}{blank: >long$} {text: <50}",
+            "   - {hours: >2}:{minutes: >2}{blank: >long$} {text: <50}",
+            hours = zero_to_space(hours),
+            minutes = zero_to_space(minutes),
             blank = "",
             long = indent * 2,
             text = task.text,
         );
+    }
+}
+
+fn zero_to_space(number: i32) -> String {
+    if number == 0 {
+        " ".to_string()
+    } else {
+        number.to_string()
     }
 }
 
