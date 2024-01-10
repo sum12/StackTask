@@ -68,6 +68,11 @@ pub fn main() {
             loop {
                 match (splits.next(), splits.next()) {
                     (Some(start_entry), Some(end_entry)) => {
+                        let end_entry = if end_entry.as_bytes()[0] == b'#' {
+                            &end_entry[1..]
+                        } else {
+                            &end_entry[..]
+                        };
                         match (start_entry.parse::<i32>(), end_entry.parse::<i32>()) {
                             (Ok(start), Ok(end)) => wktimes.push(WorkTimes {
                                 end,
