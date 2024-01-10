@@ -42,9 +42,20 @@ fn indents(t: &Task, indent: usize) -> Vec<(&Task, usize)> {
 // the first number is the start time and the second number is the end time
 pub fn main() {
     let filepath = std::env::var("TASKPATH").expect("TASKPATH not set");
+    let today = chrono::offset::Local::now()
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .expect("could not get today's date")
+        .timestamp();
+    let from_secs = today
+        - std::env::var("ADDITIONAL_DAYS")
+            .unwrap_or("1".to_string())
+            .parse::<i64>()
+            .unwrap_or(1_i64)
+            * 24
+            * 3600;
 
     let buf = read_to_string(filepath).expect("unable to read file");
-    // println!("{}", format!("read {buf} from file"));
     let mut tasks: Vec<_> = buf
         .lines()
         .map(|line| {
@@ -112,6 +123,7 @@ pub fn main() {
                 )
             })
         })
+        .filter(|(task, _)| (task.start() as i64) >= from_secs)
         .collect();
     better.sort_by_key(|(task, _)| task.start());
 
@@ -128,7 +140,7 @@ pub fn main() {
             prev = date;
         }
         println!(
-            "{hours:02}:{minutes:02}:{seconds:02}{blank: >long$} {text: <50}",
+            "   {hours:02}:{minutes:02}:{seconds:02}{blank: >long$} {text: <50}",
             blank = "",
             long = indent * 2,
             text = task.text,
