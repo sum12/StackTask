@@ -1,56 +1,11 @@
-use std::{fs::read_to_string, os};
+pub mod tasks;
+use chrono::{DateTime, Local};
+pub use tasks::Task;
 
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Copy, Clone)]
-pub struct WorkTimes {
-    pub start: i32,
-    pub end: i32,
-}
+pub mod work_times;
+pub use work_times::WorkTimes;
 
-impl WorkTimes {
-    pub fn duration(&self) -> i32 {
-        self.end - self.start
-    }
-}
-
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
-pub struct Task {
-    pub work_times: Vec<WorkTimes>,
-    pub text: String,
-    pub subs: Vec<Task>,
-}
-
-impl Task {
-    pub fn start(&self) -> i32 {
-        self.work_times.iter().fold(i32::MAX, |min, wktime| {
-            if wktime.start <= min {
-                wktime.start
-            } else {
-                min
-            }
-        })
-    }
-
-    pub fn finish(&self) -> i32 {
-        self.work_times.iter().fold(
-            i32::MIN,
-            |max, wktime| if wktime.end > max { wktime.end } else { max },
-        )
-    }
-
-    pub fn duration(&self) -> i32 {
-        self.work_times.iter().map(|wktime| wktime.duration()).sum()
-    }
-
-    // function to check if a task is a subtask of another task
-    // a task(T1) is a subtask of another task(T2) if all the work times of T1 are within the work times of T2
-    pub fn is_subtask_of(&self, other: &Task) -> bool {
-        self.work_times.iter().all(|wktime| {
-            other.work_times.iter().any(|other_wktime| {
-                wktime.start >= other_wktime.start && wktime.end <= other_wktime.end
-            })
-        })
-    }
-}
+use std::fs::read_to_string;
 
 // a method that takes two tasks (t1 and t2) and pushes the second task as a subtask of the first task
 // if the second task is a subtask of the first task but not a subtask of any of the subtasks of the first task
@@ -87,9 +42,20 @@ fn indents(t: &Task, indent: usize) -> Vec<(&Task, usize)> {
 // the first number is the start time and the second number is the end time
 pub fn main() {
     let filepath = std::env::var("TASKPATH").expect("TASKPATH not set");
+    let today = chrono::offset::Local::now()
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .expect("could not get today's date")
+        .timestamp();
+    let from_secs = today
+        - std::env::var("ADDITIONAL_DAYS")
+            .unwrap_or("1".to_string())
+            .parse::<i64>()
+            .unwrap_or(1_i64)
+            * 24
+            * 3600;
 
     let buf = read_to_string(filepath).expect("unable to read file");
-    // println!("{}", format!("read {buf} from file"));
     let mut tasks: Vec<_> = buf
         .lines()
         .map(|line| {
@@ -100,27 +66,26 @@ pub fn main() {
                 .last()
                 .expect(&format!("missing text for line {line}"))
                 .to_owned();
-            let mut times = vec![];
-            let _: Vec<()> = splits
-                .clone()
-                .map(|entry| {
-                    let mut number = entry;
-                    if entry.as_bytes()[0] == b'#' {
-                        times.clear();
-                        number = &entry[1..];
-                    }
-                    match number.parse::<i32>() {
-                        Ok(v) => times.push(v),
-                        _ => (),
-                    }
-                })
-                .collect();
+            let times = splits.clone().fold(vec![], |mut acc, entry| {
+                let mut number = entry;
+                if entry.as_bytes()[0] == b'#' {
+                    acc.clear();
+                    number = &entry[1..];
+                }
+                acc.push(number);
+                acc
+            });
             let wktimes: Vec<WorkTimes> = times
-                .chunks(2)
-                .map(|chunk| WorkTimes {
-                    end: chunk[0],
-                    start: -1 * chunk[1],
-                })
+                .chunks_exact(2)
+                .filter_map(
+                    |chunk| match (chunk[0].parse::<i32>(), chunk[1].parse::<i32>()) {
+                        (Ok(end), Ok(start)) => Some(WorkTimes {
+                            end,
+                            start: -1 * start,
+                        }),
+                        _ => None,
+                    },
+                )
                 .collect();
             Task {
                 text,
@@ -143,24 +108,53 @@ pub fn main() {
     for task in tasks.iter() {
         push_subtask(&mut root, task);
     }
-    let mut with_idents = indents(&root, 0);
-    with_idents.sort_by_key(|(task, _)| task.start());
+    let with_idents = indents(&root, 0);
+    let mut better: Vec<_> = with_idents
+        .iter()
+        .flat_map(|(ref task, ref indent)| {
+            task.work_times.iter().map(move |wktime| {
+                (
+                    Task {
+                        text: task.text.to_string(),
+                        subs: vec![],
+                        work_times: vec![wktime.clone()],
+                    },
+                    indent,
+                )
+            })
+        })
+        .filter(|(task, _)| (task.start() as i64) >= from_secs)
+        .collect();
+    better.sort_by_key(|(task, _)| task.start());
 
-    let mut prev_date = i32::MIN;
-    for (task, indent) in with_idents {
+    let mut prev: chrono::NaiveDate = Default::default();
+    for (task, indent) in better {
         let (hours, remaining) = (task.duration() / 3600, task.duration() % 3600);
-        let (minutes, seconds) = (remaining / 60, task.duration() % 60);
-        let date = task.start() / (3600 * 24);
-        if prev_date < date {
-            println!("");
-            prev_date = date
+        let (minutes, _) = (remaining / 60, task.duration() % 60);
+        let date = DateTime::from_timestamp(task.start().into(), 0)
+            .unwrap()
+            .with_timezone(&Local)
+            .date_naive();
+        if prev < date {
+            println!("{date}");
+            prev = date;
         }
         println!(
-            "{hours:02}:{minutes:02}:{seconds:02}{blank: >long$} {text}",
+            "   - {hours: >2}:{minutes: >2}{blank: >long$} {text: <50}",
+            hours = zero_to_space(hours),
+            minutes = zero_to_space(minutes),
             blank = "",
             long = indent * 2,
-            text = task.text
+            text = task.text,
         );
+    }
+}
+
+fn zero_to_space(number: i32) -> String {
+    if number == 0 {
+        " ".to_string()
+    } else {
+        number.to_string()
     }
 }
 
