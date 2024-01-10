@@ -5,7 +5,7 @@ pub use tasks::Task;
 pub mod work_times;
 pub use work_times::WorkTimes;
 
-use std::fs::read_to_string;
+use std::{fs::read_to_string, iter::repeat};
 
 // a method that takes two tasks (t1 and t2) and pushes the second task as a subtask of the first task
 // if the second task is a subtask of the first task but not a subtask of any of the subtasks of the first task
@@ -59,38 +59,30 @@ pub fn main() {
     let mut tasks: Vec<_> = buf
         .lines()
         .map(|line| {
-            let splits = line.split(",");
-            // splits = dbg!(splits);
+            let mut splits = line.split(',').rev();
             let text = splits
-                .clone()
-                .last()
+                .next()
                 .expect(&format!("missing text for line {line}"))
                 .to_owned();
-            let times = splits.clone().fold(vec![], |mut acc, entry| {
-                let mut number = entry;
-                if entry.as_bytes()[0] == b'#' {
-                    acc.clear();
-                    number = &entry[1..];
+            let mut wktimes = vec![];
+            loop {
+                match (splits.next(), splits.next()) {
+                    (Some(start_entry), Some(end_entry)) => {
+                        match (start_entry.parse::<i32>(), end_entry.parse::<i32>()) {
+                            (Ok(start), Ok(end)) => wktimes.push(WorkTimes {
+                                end,
+                                start: -1 * start,
+                            }),
+                            _ => continue,
+                        }
+                    }
+                    _ => break,
                 }
-                acc.push(number);
-                acc
-            });
-            let wktimes: Vec<WorkTimes> = times
-                .chunks_exact(2)
-                .filter_map(
-                    |chunk| match (chunk[0].parse::<i32>(), chunk[1].parse::<i32>()) {
-                        (Ok(end), Ok(start)) => Some(WorkTimes {
-                            end,
-                            start: -1 * start,
-                        }),
-                        _ => None,
-                    },
-                )
-                .collect();
+            }
             Task {
                 text,
-                subs: vec![],
                 work_times: wktimes,
+                ..Default::default()
             }
         })
         .collect();
@@ -108,21 +100,10 @@ pub fn main() {
     for task in tasks.iter() {
         push_subtask(&mut root, task);
     }
-    let with_idents = indents(&root, 0);
+    let with_idents: Vec<(&Task, usize)> = indents(&root, 0);
     let mut better: Vec<_> = with_idents
         .iter()
-        .flat_map(|(ref task, ref indent)| {
-            task.work_times.iter().map(move |wktime| {
-                (
-                    Task {
-                        text: task.text.to_string(),
-                        subs: vec![],
-                        work_times: vec![wktime.clone()],
-                    },
-                    indent,
-                )
-            })
-        })
+        .flat_map(|(task, indent)| task.into_iter().zip(repeat(indent)))
         .filter(|(task, _)| (task.start() as i64) >= from_secs)
         .collect();
     better.sort_by_key(|(task, _)| task.start());

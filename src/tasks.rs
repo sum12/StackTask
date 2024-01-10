@@ -1,6 +1,6 @@
 use crate::work_times::WorkTimes;
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Default)]
 pub struct Task {
     pub work_times: Vec<WorkTimes>,
     pub text: String,
@@ -37,5 +37,22 @@ impl Task {
                 wktime.start >= other_wktime.start && wktime.end <= other_wktime.end
             })
         })
+    }
+}
+
+impl IntoIterator for &Task {
+    type Item = Task;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.work_times
+            .iter()
+            .map(|wktime| Task {
+                text: self.text.to_string(),
+                subs: vec![],
+                work_times: vec![wktime.clone()],
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 }
